@@ -19,6 +19,7 @@ from .processing import (CenterCrop, ColorJitter, Flip, Fuse, MultiScaleCrop,
                          TenCrop, ThreeCrop)
 from .text_transforms import CLIPTokenize
 from .wrappers import ImgAug, PytorchVideoWrapper, TorchVisionWrapper
+from .jbf_tranforms import JBFDecode, GenerateJBFTarget, JBFFlip
 
 __all__ = [
     'ArrayDecode', 'AudioFeatureSelector', 'BuildPseudoClip', 'CenterCrop',
@@ -37,5 +38,5 @@ __all__ = [
     'SampleAVAFrames', 'SampleFrames', 'TenCrop', 'ThreeCrop', 'ToMotion',
     'TorchVisionWrapper', 'Transpose', 'UniformSample', 'UniformSampleFrames',
     'UntrimmedSampleFrames', 'MMUniformSampleFrames', 'MMDecode', 'MMCompact',
-    'CLIPTokenize'
+    'CLIPTokenize', 'JBFDecode', 'GenerateJBFTarget', 'JBFFlip'
 ]
