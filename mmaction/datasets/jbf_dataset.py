@@ -16,8 +16,8 @@ class JBFDataset(PoseDataset):
                  valid_ratio: Optional[float] = None,
                  box_thr: float = 0.5,
                  **kwargs) -> None:
-        super().__init__(ann_file, pipeline, split, valid_ratio, box_thr, **kwargs)
         self.jbf_dir = jbf_dir
+        super().__init__(ann_file, pipeline, split, valid_ratio, box_thr, **kwargs)
 
     def load_data_list(self) -> List[Dict]:
         data_list = super().load_data_list()

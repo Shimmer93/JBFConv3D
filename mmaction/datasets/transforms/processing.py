@@ -382,8 +382,9 @@ class RandomResizedCrop(RandomCrop):
             if 'keypoint' in results:
                 results['keypoint'] = self._crop_kps(results['keypoint'],
                                                      crop_bbox)
+            ratio = results['rescale_ratio'] if 'rescale_ratio' in results else 1
             if 'imgs' in results:
-                results['imgs'] = self._crop_imgs(results['imgs'], crop_bbox)
+                results['imgs'] = self._crop_imgs(results['imgs'], crop_bbox // ratio)
         else:
             lazyop = results['lazy']
             if lazyop['flip']:

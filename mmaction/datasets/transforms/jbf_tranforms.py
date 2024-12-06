@@ -25,12 +25,12 @@ else:
     from functools import partial
     get_mode = partial(mode, keepdims=True)
 
-def read_jbf(jbf_dict):
-    jbf_bytes = jbf_dict['jbf'].tobytes()
+def read_jbf(jbf, num_maps=19):
+    jbf_bytes = jbf.tobytes()
     jbf_img = Image.open(BytesIO(jbf_bytes))
     jbf_img = np.array(jbf_img)
 
-    J = jbf_dict['nmaps']
+    J = num_maps
     HJ, W = jbf_img.shape[:2]
     assert HJ % J == 0
     H = HJ // J
@@ -38,16 +38,18 @@ def read_jbf(jbf_dict):
     jbf_out = jbf_img.reshape(J, H, W).astype(np.float32)
     return jbf_out
 
-def read_jbf_seq(fn):
+def read_jbf_seq(fn, num_maps=19):
     jbf_seq = np.load(fn, allow_pickle=True)
-    jbf_seq = [read_jbf(jbf_dict) for jbf_dict in jbf_seq]
+    jbf_seq = [read_jbf(jbf, num_maps) for jbf in jbf_seq]
     return jbf_seq
 
 @TRANSFORMS.register_module()
 class JBFDecode(PoseDecode):
     def transform(self, results: Dict) -> Dict:
         results = super().transform(results)
-        jbfs = read_jbf_seq(results['jbf_path'])
+        
+        num_maps = results['keypoint'].shape[-2] + 2
+        jbfs = read_jbf_seq(results['jbf_path'], num_maps)
         results['total_frames'] = len(jbfs)
 
         if 'frame_inds' not in results:
@@ -114,6 +116,7 @@ class GenerateJBFTarget(GeneratePoseTarget):
             return super().transform(results)
         
         jbfs = results['imgs']
+        jbfs = np.stack(jbfs, axis=0).transpose(0, 3, 1, 2)
         J = jbfs.shape[1] - 2
 
         if not self.with_jmv:

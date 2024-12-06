@@ -20,13 +20,13 @@ model = dict(
     cls_head=dict(
         type='I3DHead',
         in_channels=512,
-        num_classes=60,
+        num_classes=51,
         dropout_ratio=0.5,
         average_clips='prob'))
 
 dataset_type = 'JBFDataset'
-ann_file = '/home/zpengac/datasets/har/ntu/ntu60_2d_jbf.pkl'
-jbf_dir = '/home/zpengac/datasets/har/ntu/jbf'
+ann_file = '/home/zpengac/datasets/har/hmdb51/hmdb51_hrnet_jbf.pkl'
+jbf_dir = '/home/zpengac/datasets/har/hmdb51/jbf'
 left_kp = [1, 3, 5, 7, 9, 11, 13, 15]
 right_kp = [2, 4, 6, 8, 10, 12, 14, 16]
 train_pipeline = [
@@ -53,7 +53,7 @@ val_pipeline = [
     dict(type='UniformSampleFrames', clip_len=48, num_clips=1, test_mode=True),
     dict(type='JBFDecode'),
     # dict(type='PoseCompact', hw_ratio=1., allow_imgpad=True),
-    # dict(type='Resize', scale=(-1, 64)),
+    dict(type='Resize', scale=(64, 64)),
     # dict(type='CenterCrop', crop_size=64),
     dict(
         type='GenerateJBFTarget',
@@ -72,7 +72,7 @@ test_pipeline = [
         type='UniformSampleFrames', clip_len=48, num_clips=10, test_mode=True),
     dict(type='JBFDecode'),
     # dict(type='PoseCompact', hw_ratio=1., allow_imgpad=True),
-    # dict(type='Resize', scale=(-1, 64)),
+    dict(type='Resize', scale=(64, 64)),
     # dict(type='CenterCrop', crop_size=64),
     dict(
         type='GenerateJBFTarget',
@@ -102,7 +102,7 @@ train_dataloader = dict(
             type=dataset_type,
             ann_file=ann_file,
             jbf_dir=jbf_dir,
-            split='xview_train',
+            split='train1',
             pipeline=train_pipeline)))
 val_dataloader = dict(
     batch_size=32,
@@ -113,7 +113,7 @@ val_dataloader = dict(
         type=dataset_type,
         ann_file=ann_file,
         jbf_dir=jbf_dir,
-        split='xview_val',
+        split='test1',
         pipeline=val_pipeline,
         test_mode=True))
 test_dataloader = dict(
@@ -125,7 +125,7 @@ test_dataloader = dict(
         type=dataset_type,
         ann_file=ann_file,
         jbf_dir=jbf_dir,
-        split='xview_val',
+        split='test1',
         pipeline=test_pipeline,
         test_mode=True))
 
@@ -147,5 +147,5 @@ param_scheduler = [
 ]
 
 optim_wrapper = dict(
-    optimizer=dict(type='SGD', lr=0.2, momentum=0.9, weight_decay=0.0003),
+    optimizer=dict(type='SGD', lr=0.1, momentum=0.9, weight_decay=0.0003),
     clip_grad=dict(max_norm=40, norm_type=2))
