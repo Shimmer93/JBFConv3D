@@ -33,7 +33,7 @@ train_pipeline = [
     dict(type='UniformSampleFrames', clip_len=48),
     dict(type='JBFDecode'),
     # dict(type='PoseCompact', hw_ratio=1., allow_imgpad=True),
-    # dict(type='Resize', scale=(-1, 64)),
+    dict(type='Resize', scale=(64, 64)),
     dict(type='RandomResizedCrop', area_range=(0.56, 1.0)),
     dict(type='Resize', scale=(56, 56), keep_ratio=False),
     dict(type='JBFFlip', flip_ratio=0.5, left_kp=left_kp, right_kp=right_kp),
@@ -117,7 +117,7 @@ val_dataloader = dict(
         pipeline=val_pipeline,
         test_mode=True))
 test_dataloader = dict(
-    batch_size=32,
+    batch_size=1,
     num_workers=8,
     persistent_workers=True,
     sampler=dict(type='DefaultSampler', shuffle=False),
@@ -147,5 +147,5 @@ param_scheduler = [
 ]
 
 optim_wrapper = dict(
-    optimizer=dict(type='SGD', lr=0.1, momentum=0.9, weight_decay=0.0003),
+    optimizer=dict(type='SGD', lr=0.2, momentum=0.9, weight_decay=0.0003),
     clip_grad=dict(max_norm=40, norm_type=2))

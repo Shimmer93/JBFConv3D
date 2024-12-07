@@ -38,7 +38,7 @@ train_pipeline = [
     dict(type='UniformSampleFrames', clip_len=48),
     dict(type='JBFDecode'),
     # dict(type='PoseCompact', hw_ratio=1., allow_imgpad=True),
-    # dict(type='Resize', scale=(-1, 64)),
+    # dict(type='Resize', scale=(64, 64)),
     dict(type='RandomResizedCrop', area_range=(0.56, 1.0)),
     dict(type='Resize', scale=(56, 56), keep_ratio=False),
     dict(type='JBFFlip', flip_ratio=0.5, left_kp=left_kp, right_kp=right_kp),
@@ -59,7 +59,7 @@ val_pipeline = [
     dict(type='UniformSampleFrames', clip_len=48, num_clips=1, test_mode=True),
     dict(type='JBFDecode'),
     # dict(type='PoseCompact', hw_ratio=1., allow_imgpad=True),
-    # dict(type='Resize', scale=(-1, 64)),
+    dict(type='Resize', scale=(64, 64)),
     # dict(type='CenterCrop', crop_size=64),
     dict(
         type='GenerateJBFTarget',
@@ -79,7 +79,7 @@ test_pipeline = [
         type='UniformSampleFrames', clip_len=48, num_clips=10, test_mode=True),
     dict(type='JBFDecode'),
     # dict(type='PoseCompact', hw_ratio=1., allow_imgpad=True),
-    # dict(type='Resize', scale=(-1, 64)),
+    dict(type='Resize', scale=(64, 64)),
     # dict(type='CenterCrop', crop_size=64),
     dict(
         type='GenerateJBFTarget',
