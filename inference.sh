@@ -8,7 +8,7 @@
 #SBATCH --cpus-per-task=16
 ##SBATCH --nodelist=hhnode-ib-140
 
-bash tools/dist_run.sh tools/inference.py 8 \
+bash tools/dist_run.sh tools/inference_jbf.py 8 \
     --ann_file /home/zpengac/pose/PoseSegmentationMask/demo_jbfs5/demo.pkl \
     --jbf_dir /home/zpengac/pose/PoseSegmentationMask/demo_jbfs5 \
     --out_filename demo_output2 \
