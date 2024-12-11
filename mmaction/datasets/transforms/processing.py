@@ -350,6 +350,7 @@ class RandomResizedCrop(RandomCrop):
                                    'with lazy == True')
 
         img_h, img_w = results['img_shape']
+        rescale_ratio = img_h / results['imgs'][0].shape[0]
 
         left, top, right, bottom = self.get_crop_bbox(
             (img_h, img_w), self.area_range, self.aspect_ratio_range)
@@ -382,9 +383,8 @@ class RandomResizedCrop(RandomCrop):
             if 'keypoint' in results:
                 results['keypoint'] = self._crop_kps(results['keypoint'],
                                                      crop_bbox)
-            ratio = 4 #results['rescale_ratio'] if 'rescale_ratio' in results else 1
             if 'imgs' in results:
-                results['imgs'] = self._crop_imgs(results['imgs'], crop_bbox // ratio)
+                results['imgs'] = self._crop_imgs(results['imgs'], crop_bbox // rescale_ratio)
         else:
             lazyop = results['lazy']
             if lazyop['flip']:

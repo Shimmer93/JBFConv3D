@@ -33,9 +33,10 @@ def parse_args():
 def inference_per_frame(model, anno):
     total_frames = anno['total_frames']
     results_pre_frame = []
-    for i in range(total_frames - 47):
+    for i in range(total_frames):
         anno_i = cp.deepcopy(anno)
-        anno_i['frame_inds'] = np.arange(i, i + 48)
+        anno_i['frame_inds'] = np.arange(i-48, i)
+        anno_i['frame_inds'] = np.maximum(anno_i['frame_inds'], 0)
         results_i = inference_recognizer(model, anno_i)
         max_pred_index = results_i.pred_score.argmax().item()
         max_pred_score = results_i.pred_score.max().item()
@@ -48,6 +49,21 @@ def inference_per_video(model, anno):
     max_pred_index = results.pred_score.argmax().item()
     max_pred_score = results.pred_score.max().item()
     return max_pred_index, max_pred_score
+
+def inference(anno, har_model, jbf_path, per_video=False):
+    anno['start_index'] = 0
+    anno['clip_len'] = 48
+    anno['frame_interval'] = None
+    anno['num_clips'] = 1
+    anno['jbf_path'] = jbf_path
+
+    if per_video:
+        max_pred_index, max_pred_score = inference_per_video(har_model, anno)
+        results = [(max_pred_index, max_pred_score)]
+    else:
+        results = inference_per_frame(har_model, anno)
+
+    return results
 
 def main():
     args = parse_args()
@@ -68,21 +84,8 @@ def main():
 
     for anno in tqdm(my_part):
         frame_dir = anno["frame_dir"]
-        anno['start_index'] = 0
-        anno['clip_len'] = 48
-        anno['frame_interval'] = None
-        anno['num_clips'] = 1
-        anno['jbf_path'] = osp.join(args.jbf_dir, anno['frame_dir'] + '.npy')
-
-        if anno['total_frames'] < 48:
-            print(f'{anno["frame_dir"]} has less than 48 frames, skipped')
-            continue
-
-        if args.per_video:
-            max_pred_index, max_pred_score = inference_per_video(model, anno)
-            results = [(max_pred_index, max_pred_score)]
-        else:
-            results = inference_per_frame(model, anno)
+        jbf_path = osp.join(args.jbf_dir, f'{frame_dir}.npy')
+        results = inference(anno, model, jbf_path, args.per_video)
         out_result_fn = osp.join(args.out_result_dir, f'{frame_dir}.pkl')
         dump(results, out_result_fn)
 

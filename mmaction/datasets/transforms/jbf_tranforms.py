@@ -1,47 +1,23 @@
 # Copyright (c) OpenMMLab. All rights reserved.
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Dict, Tuple, Union
 
 import numpy as np
 import scipy
 import mmcv
-from mmcv.transforms import BaseTransform, KeyMapper
-from mmengine.dataset import Compose
 from packaging import version as pv
 from scipy.stats import mode
-from torch.nn.modules.utils import _pair
-from PIL import Image
-from io import BytesIO
-import os
 from scipy.ndimage import gaussian_filter
 
 from mmaction.registry import TRANSFORMS
-from .loading import DecordDecode, DecordInit
-from .processing import _combine_quadruple, Flip
-from .pose_transforms import PoseDecode, GeneratePoseTarget
+from mmaction.utils import read_jbf_seq
+from .processing import Flip
+from .pose_transforms import PoseDecode, GeneratePoseTarget, MMCompact
 
 if pv.parse(scipy.__version__) < pv.parse('1.11.0'):
     get_mode = mode
 else:
     from functools import partial
     get_mode = partial(mode, keepdims=True)
-
-def read_jbf(jbf, num_maps=19):
-    jbf_bytes = jbf.tobytes()
-    jbf_img = Image.open(BytesIO(jbf_bytes))
-    jbf_img = np.array(jbf_img)
-
-    J = num_maps
-    HJ, W = jbf_img.shape[:2]
-    assert HJ % J == 0
-    H = HJ // J
-    
-    jbf_out = jbf_img.reshape(J, H, W).astype(np.float32)
-    return jbf_out
-
-def read_jbf_seq(fn, num_maps=19):
-    jbf_seq = np.load(fn, allow_pickle=True)
-    jbf_seq = [read_jbf(jbf, num_maps) for jbf in jbf_seq]
-    return jbf_seq
 
 @TRANSFORMS.register_module()
 class JBFDecode(PoseDecode):
@@ -193,3 +169,77 @@ class JBFFlip(Flip):
             indices[r] = l
         imgs = imgs[..., ::-1, :][..., indices]
         return imgs
+
+@TRANSFORMS.register_module()
+class JBFCompactResizePad(MMCompact):
+    def __init__(self,
+                 padding: float = 0.25,
+                 threshold: int = 10,
+                 hw_ratio: Union[float, Tuple[float]] = 1,
+                 allow_imgpad: bool = True,
+                 interpolation: str = 'bilinear') -> None:
+        super().__init__(padding, threshold, hw_ratio, allow_imgpad)
+        self.interpolation = interpolation
+
+    def _resize_jbfs(self, jbfs, jbf_shapes):
+        return [
+            mmcv.imresize(jbf, (int(shape[0]), int(shape[1])), interpolation=self.interpolation)
+            for jbf, shape in zip(jbfs, jbf_shapes)
+        ]
+    
+    def _pad_jbfs(self, jbfs, jbf_boxes, sample_box):
+        min_x, min_y, max_x, max_y = sample_box
+        pad_jbfs = []
+        for jbf, jbf_box in zip(jbfs, jbf_boxes):
+            jbf_min_x, jbf_min_y, jbf_max_x, jbf_max_y = jbf_box
+            pad_u = int(jbf_min_y - min_y)
+            pad_d = int(max_y - jbf_max_y)
+            pad_l = int(jbf_min_x - min_x)
+            pad_r = int(max_x - jbf_max_x)
+
+            if pad_u < 0:
+                jbf = jbf[-pad_u:, :, :]
+                pad_u = 0
+            if pad_d < 0:
+                jbf = jbf[:pad_d, :, :]
+                pad_d = 0
+            if pad_l < 0:
+                jbf = jbf[:, -pad_l:, :]
+                pad_l = 0
+            if pad_r < 0:
+                jbf = jbf[:, :pad_r, :]
+                pad_r = 0
+
+            pad_jbf = np.pad(jbf, ((pad_u, pad_d), (pad_l, pad_r), (0, 0)))
+            pad_jbfs.append(pad_jbf)
+        return pad_jbfs
+
+    def transform(self, results: Dict) -> Dict:
+        """The transform function of :class:`MMCompact`.
+
+        Args:
+            results (dict): The result dict.
+
+        Returns:
+            dict: The result dict.
+        """
+        img_shape = results['img_shape']
+        kp = results['keypoint']
+        # Make NaN zero
+        kp[np.isnan(kp)] = 0.
+        min_x, min_y, max_x, max_y = self._get_box(kp, img_shape)
+
+        kp_x, kp_y = kp[..., 0], kp[..., 1]
+        kp_x[kp_x != 0] -= min_x
+        kp_y[kp_y != 0] -= min_y
+
+        new_shape = (max_y - min_y, max_x - min_x)
+        results['img_shape'] = new_shape
+        jbf_boxes = results['jbf_boxes'].astype(np.int32)
+        # jbf_boxes = (jbf_boxes + 1) * np.array([[new_shape[1], new_shape[0], new_shape[1], new_shape[0]]]) / 2
+        # jbf_boxes = jbf_boxes.astype(np.int32)
+        jbf_shapes = jbf_boxes[..., [3, 2]] - jbf_boxes[..., [1, 0]]
+        results['imgs'] = self._resize_jbfs(results['imgs'], jbf_shapes)
+        results['imgs'] = self._pad_jbfs(results['imgs'], jbf_boxes, (min_x, min_y, max_x, max_y))
+
+        return results
