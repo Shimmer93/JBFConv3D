@@ -4,6 +4,7 @@ from typing import Dict, Tuple, Union
 import numpy as np
 import scipy
 import mmcv
+from mmcv.transforms import BaseTransform
 from packaging import version as pv
 from scipy.stats import mode
 from scipy.ndimage import gaussian_filter
@@ -20,13 +21,36 @@ else:
     get_mode = partial(mode, keepdims=True)
 
 @TRANSFORMS.register_module()
+class ReadJBF(BaseTransform):
+    def __init__(self):
+        pass
+
+    def transform(self, results: Dict) -> Dict:
+        num_maps = results['keypoint'].shape[-2] + 2
+        jbfs = read_jbf_seq(results['jbf_path'], num_maps)
+        jbfs = np.stack(jbfs, axis=0).astype(np.float32) / 255.0
+        jbfs = jbfs.transpose(0, 2, 3, 1)
+        jmvs = jbfs[..., :-2]
+        bfms = jbfs[..., -2:]
+
+        cur_num_person = results['keypoint'].shape[0]
+        keypoint_scale = 1 / (np.sqrt(np.sum(jmvs, axis=(1,2)))[None, ..., None] + 1e-6)
+        keypoint_scale = np.repeat(keypoint_scale, repeats=cur_num_person, axis=0)
+
+        results['keypoint_scale'] = keypoint_scale
+        results['imgs'] = bfms
+
+        return results
+
+@TRANSFORMS.register_module()
 class JBFDecode(PoseDecode):
     def transform(self, results: Dict) -> Dict:
         results = super().transform(results)
         
-        num_maps = results['keypoint'].shape[-2] + 2
-        jbfs = read_jbf_seq(results['jbf_path'], num_maps)
-        results['total_frames'] = len(jbfs)
+        # num_maps = results['keypoint'].shape[-2] + 2
+        # jbfs = read_jbf_seq(results['jbf_path'], num_maps)
+        bmvs = results['imgs']
+        results['total_frames'] = len(results['imgs'])
 
         if 'frame_inds' not in results:
             results['frame_inds'] = np.arange(results['total_frames'])
@@ -35,11 +59,11 @@ class JBFDecode(PoseDecode):
         offset = results.get('offset', 0)
         frame_inds = results['frame_inds'] + offset
 
-        jbfs = np.stack(jbfs, axis=0).astype(np.float32) / 255.0
-        jbfs = jbfs.transpose(0, 2, 3, 1)
-        jbfs = jbfs[frame_inds, ...]
+        # jbfs = np.stack(jbfs, axis=0).astype(np.float32) / 255.0
+        # jbfs = jbfs.transpose(0, 2, 3, 1)
+        bmvs = bmvs[frame_inds, ...]
 
-        results['imgs'] = jbfs
+        results['imgs'] = bmvs
         return results
     
 @TRANSFORMS.register_module()
@@ -49,7 +73,6 @@ class GenerateJBFTarget(GeneratePoseTarget):
                  use_score: bool = True,
                  with_kp: bool = True,
                  with_limb: bool = False,
-                 with_jmv: bool = True,
                  with_bm: bool = True,
                  with_fm: bool = True,
                  jmv_weight: float = 0.1,
@@ -82,7 +105,6 @@ class GenerateJBFTarget(GeneratePoseTarget):
         self.right_limb = right_limb
         self.scaling = scaling
 
-        self.with_jmv = with_jmv
         self.with_bm = with_bm
         self.with_fm = with_fm
         self.jmv_weight = jmv_weight
@@ -91,41 +113,24 @@ class GenerateJBFTarget(GeneratePoseTarget):
         if 'imgs' not in results:
             return super().transform(results)
         
-        jbfs = results['imgs']
-        jbfs = np.stack(jbfs, axis=0).transpose(0, 3, 1, 2)
-        J = jbfs.shape[1] - 2
+        bfms = results['imgs']
+        bfms = np.stack(bfms, axis=0).transpose(0, 3, 1, 2)
 
-        if not self.with_jmv:
-            jbfs = jbfs[:, J:, ...]
-            J = 0
         if self.with_bm and not self.with_fm:
-            jbfs = jbfs[:, :-1, ...]
+            bfms = bfms[:, :-1, ...]
         elif not self.with_bm and self.with_fm:
-            jbfs = np.concatenate([jbfs[:, :-2, ...], jbfs[:, -1:, ...]], axis=1)
-        elif not self.with_bm and not self.with_fm:
-            jbfs = jbfs[:, :-2, ...]
+            bfms = bfms[:, 1:, ...]
 
-        jbfs = gaussian_filter(jbfs, sigma=[0, 0, self.sigma, self.sigma])
-        jmvs = jbfs[:, :J, ...] if self.with_jmv else None
-        bfms = jbfs[:, J:, :, :] if self.with_bm or self.with_fm else None
-
-        if self.with_limb and self.with_jmv:
-            lmvs = np.zeros_like(jmvs)
-            for i, limb in enumerate(self.skeletons):
-                lmvs[:, i, ...] = jmvs[:, limb, ...].max(axis=1)
-            jmvs = lmvs
+        bfms = gaussian_filter(bfms, sigma=[0, 0, self.sigma, self.sigma])
 
         results.pop('imgs')
 
         if self.with_kp or self.with_limb:
             heatmap = self.gen_an_aug(results)
         else:
-            heatmap = np.zeros_like(jmvs) if self.with_jmv else None
+            heatmap = None
 
-        if self.with_jmv:
-            heatmap = heatmap + jmvs * self.jmv_weight
-
-        if self.double:
+        if self.double and heatmap is not None:
             indices = np.arange(heatmap.shape[1], dtype=np.int64)
             left, right = (self.left_kp, self.right_kp) if self.with_kp else (self.left_limb, self.right_limb)
             for l, r in zip(left, right):  # noqa: E741
@@ -138,7 +143,10 @@ class GenerateJBFTarget(GeneratePoseTarget):
         if self.with_bm or self.with_fm:
             if self.double:
                 bfms = np.concatenate([bfms, bfms[..., ::-1]], axis=0)
-            results['imgs'] = np.concatenate([results['imgs'], bfms], axis=1)
+            if heatmap is None:
+                results['imgs'] = bfms
+            else:
+                results['imgs'] = np.concatenate([results['imgs'], bfms], axis=1)
 
         return results
     

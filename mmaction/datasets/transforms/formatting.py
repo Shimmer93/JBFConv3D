@@ -442,6 +442,10 @@ class FormatGCNInput(BaseTransform):
             (M, nc, T // nc, V, C)).transpose(1, 0, 2, 3, 4)
 
         results['keypoint'] = np.ascontiguousarray(keypoint)
+        # print(results['keypoint'].shape)
+        if 'imgs' in results:
+            del results['imgs']
+
         return results
 
     def __repr__(self) -> str:
@@ -449,3 +453,54 @@ class FormatGCNInput(BaseTransform):
                     f'num_person={self.num_person}, '
                     f'mode={self.mode})')
         return repr_str
+
+@TRANSFORMS.register_module()
+class FormatGCNInputWithScale(FormatGCNInput):
+    def __init__(self, num_person: int = 2, mode: str = 'zero') -> None:
+        super().__init__(num_person, mode)
+
+    def transform(self, results: Dict) -> Dict:
+        """The transform function of :class:`FormatGCNInputWithScale`.
+
+        Args:
+            results (dict): The result dict.
+
+        Returns:
+            dict: The result dict.
+        """
+        keypoint = results['keypoint']
+        cur_num_person = keypoint.shape[0]
+
+        jbfs = results['imgs']
+        jbfs = np.stack(jbfs, axis=0).transpose(0, 3, 1, 2)
+        jmvs = jbfs[:, :-2, :, :]
+        keypoint_scales = 1 / (np.sqrt(np.sum(jmvs, axis=(2,3)))[None, ..., None] + 1e-6)
+        keypoint_scales = np.repeat(keypoint_scales, repeats=cur_num_person, axis=0)
+        keypoint = np.concatenate((keypoint, keypoint_scales), axis=-1)
+        if 'keypoint_score' in results:
+            keypoint = np.concatenate(
+                (keypoint, results['keypoint_score'][..., None]), axis=-1)
+
+        if cur_num_person < self.num_person:
+            pad_dim = self.num_person - cur_num_person
+            pad = np.zeros(
+                (pad_dim, ) + keypoint.shape[1:], dtype=keypoint.dtype)
+            keypoint = np.concatenate((keypoint, pad), axis=0)
+            if self.mode == 'loop' and cur_num_person == 1:
+                for i in range(1, self.num_person):
+                    keypoint[i] = keypoint[0]
+
+        elif cur_num_person > self.num_person:
+            keypoint = keypoint[:self.num_person]
+
+        M, T, V, C = keypoint.shape
+        # print(keypoint[0,0])
+        nc = results.get('num_clips', 1)
+        assert T % nc == 0
+        keypoint = keypoint.reshape(
+            (M, nc, T // nc, V, C)).transpose(1, 0, 2, 3, 4)
+
+        results['keypoint'] = np.ascontiguousarray(keypoint)
+
+        del results['imgs']
+        return results

@@ -805,12 +805,15 @@ class JointToBone(BaseTransform):
         M, T, V, C = keypoint.shape
         bone = np.zeros((M, T, V, C), dtype=np.float32)
 
-        assert C in [2, 3]
+        assert C in [2, 3, 4]
         for v1, v2 in self.pairs:
             bone[..., v1, :] = keypoint[..., v1, :] - keypoint[..., v2, :]
-            if C == 3 and self.dataset in ['openpose', 'coco']:
+            if C >= 3 and self.dataset in ['openpose', 'coco']:
                 score = (keypoint[..., v1, 2] + keypoint[..., v2, 2]) / 2
                 bone[..., v1, 2] = score
+            if C == 4 and self.dataset in ['openpose', 'coco']:
+                scale = (keypoint[..., v1, 3] + keypoint[..., v2, 3]) / 2
+                bone[..., v1, 3] = scale
 
         results[self.target] = bone
         return results
@@ -865,11 +868,14 @@ class ToMotion(BaseTransform):
         M, T, V, C = data.shape
         motion = np.zeros_like(data)
 
-        assert C in [2, 3]
+        assert C in [2, 3, 4]
         motion[:, :T - 1] = np.diff(data, axis=1)
-        if C == 3 and self.dataset in ['openpose', 'coco']:
+        if C >= 3 and self.dataset in ['openpose', 'coco']:
             score = (data[:, :T - 1, :, 2] + data[:, 1:, :, 2]) / 2
             motion[:, :T - 1, :, 2] = score
+        if C == 4 and self.dataset in ['openpose', 'coco']:
+            scale = (data[:, :T - 1, :, 3] + data[:, 1:, :, 3]) / 2
+            motion[:, :T - 1, :, 3] = scale
 
         results[self.target] = motion
 
@@ -981,6 +987,12 @@ class GenSkeFeat(BaseTransform):
             keypoint_score = results.pop('keypoint_score')
             results['keypoint'] = np.concatenate(
                 [keypoint, keypoint_score[..., None]], -1)
+
+        if 'keypoint_scale' in results:
+            assert self.dataset != 'nturgb+d'
+            keypoint_scale = results.pop('keypoint_scale')
+            results['keypoint'] = np.concatenate([results['keypoint'], keypoint_scale], axis=-1)
+
         return self.ops(results)
 
     def __repr__(self) -> str:
