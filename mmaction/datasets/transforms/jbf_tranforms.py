@@ -38,7 +38,7 @@ class ReadJBF(BaseTransform):
         keypoint_scale = np.repeat(keypoint_scale, repeats=cur_num_person, axis=0)
 
         results['keypoint_scale'] = keypoint_scale
-        results['imgs'] = bfms
+        results['imgs'] = (bfms * 255).astype(np.uint8)
 
         return results
 
@@ -61,7 +61,7 @@ class JBFDecode(PoseDecode):
 
         # jbfs = np.stack(jbfs, axis=0).astype(np.float32) / 255.0
         # jbfs = jbfs.transpose(0, 2, 3, 1)
-        bmvs = bmvs[frame_inds, ...]
+        bmvs = bmvs[frame_inds, ...].astype(np.float32) / 255.0
 
         results['imgs'] = bmvs
         return results

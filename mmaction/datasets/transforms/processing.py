@@ -136,7 +136,7 @@ class RandomCrop(BaseTransform):
     def _crop_imgs(imgs, crop_bbox):
         """Static method for cropping images."""
         x1, y1, x2, y2 = crop_bbox
-        return [img[y1:y2, x1:x2] for img in imgs]
+        return [img[int(y1):int(y2), int(x1):int(x2)] for img in imgs]
 
     @staticmethod
     def _box_crop(box, crop_bbox):
@@ -384,6 +384,7 @@ class RandomResizedCrop(RandomCrop):
                 results['keypoint'] = self._crop_kps(results['keypoint'],
                                                      crop_bbox)
             if 'imgs' in results:
+                # print(results['imgs'][0].shape)
                 results['imgs'] = self._crop_imgs(results['imgs'], crop_bbox // rescale_ratio)
         else:
             lazyop = results['lazy']

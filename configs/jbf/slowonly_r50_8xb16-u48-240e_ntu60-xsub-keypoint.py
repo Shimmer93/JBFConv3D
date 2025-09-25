@@ -6,7 +6,7 @@ model = dict(
         type='ResNet3dSlowOnly',
         depth=50,
         pretrained=None,
-        in_channels=19,
+        in_channels=2,
         base_channels=32,
         num_stages=3,
         out_indices=(2, ),
@@ -20,36 +20,37 @@ model = dict(
     cls_head=dict(
         type='I3DHead',
         in_channels=512,
-        num_classes=120,
+        num_classes=60,
         dropout_ratio=0.5,
         average_clips='prob'))
 
 dataset_type = 'JBFDataset'
-ann_file = '/home/zpengac/datasets/har/ntu/ntu120_2d_jbf.pkl'
-jbf_dir = '/home/zpengac/datasets/har/ntu/jbf'
+ann_file = 'data/ntu60_2d.pkl'
+jbf_dir = 'data/jbf'
 left_kp = [1, 3, 5, 7, 9, 11, 13, 15]
 right_kp = [2, 4, 6, 8, 10, 12, 14, 16]
 train_pipeline = [
+    dict(type='ReadJBF'),
     dict(type='UniformSampleFrames', clip_len=48),
     dict(type='JBFDecode'),
     # dict(type='PoseCompact', hw_ratio=1., allow_imgpad=True),
     dict(type='Resize', scale=(64, 64)),
     dict(type='RandomResizedCrop', area_range=(0.56, 1.0)),
     dict(type='Resize', scale=(56, 56), keep_ratio=False),
-    dict(type='JBFFlip', flip_ratio=0.5, left_kp=left_kp, right_kp=right_kp),
+    dict(type='Flip', flip_ratio=0.5, left_kp=left_kp, right_kp=right_kp),
     dict(
         type='GenerateJBFTarget',
         sigma=0.6,
         use_score=True,
-        with_kp=True,
+        with_kp=False,
         with_limb=False, 
-        with_jmv=True, 
         with_bm=True, 
         with_fm=True),
     dict(type='FormatShape', input_format='NCTHW_Heatmap'),
     dict(type='PackActionInputs')
 ]
 val_pipeline = [
+    dict(type='ReadJBF'),
     dict(type='UniformSampleFrames', clip_len=48, num_clips=1, test_mode=True),
     dict(type='JBFDecode'),
     # dict(type='PoseCompact', hw_ratio=1., allow_imgpad=True),
@@ -59,15 +60,15 @@ val_pipeline = [
         type='GenerateJBFTarget',
         sigma=0.6,
         use_score=True,
-        with_kp=True,
+        with_kp=False,
         with_limb=False, 
-        with_jmv=True, 
         with_bm=True, 
         with_fm=True),
     dict(type='FormatShape', input_format='NCTHW_Heatmap'),
     dict(type='PackActionInputs')
 ]
 test_pipeline = [
+    dict(type='ReadJBF'),
     dict(
         type='UniformSampleFrames', clip_len=48, num_clips=10, test_mode=True),
     dict(type='JBFDecode'),
@@ -78,12 +79,11 @@ test_pipeline = [
         type='GenerateJBFTarget',
         sigma=0.6,
         use_score=True,
-        with_kp=True,
+        with_kp=False,
         with_limb=False,
         double=True,
         left_kp=left_kp,
         right_kp=right_kp, 
-        with_jmv=True, 
         with_bm=True, 
         with_fm=True),
     dict(type='FormatShape', input_format='NCTHW_Heatmap'),
@@ -91,8 +91,8 @@ test_pipeline = [
 ]
 
 train_dataloader = dict(
-    batch_size=32,
-    num_workers=8,
+    batch_size=16,
+    num_workers=4,
     persistent_workers=True,
     sampler=dict(type='DefaultSampler', shuffle=True),
     dataset=dict(
@@ -105,8 +105,8 @@ train_dataloader = dict(
             split='xsub_train',
             pipeline=train_pipeline)))
 val_dataloader = dict(
-    batch_size=32,
-    num_workers=8,
+    batch_size=16,
+    num_workers=4,
     persistent_workers=True,
     sampler=dict(type='DefaultSampler', shuffle=False),
     dataset=dict(
@@ -117,8 +117,8 @@ val_dataloader = dict(
         pipeline=val_pipeline,
         test_mode=True))
 test_dataloader = dict(
-    batch_size=32,
-    num_workers=8,
+    batch_size=16,
+    num_workers=4,
     persistent_workers=True,
     sampler=dict(type='DefaultSampler', shuffle=False),
     dataset=dict(
@@ -147,5 +147,5 @@ param_scheduler = [
 ]
 
 optim_wrapper = dict(
-    optimizer=dict(type='SGD', lr=0.2, momentum=0.9, weight_decay=0.0003),
+    optimizer=dict(type='SGD', lr=0.025, momentum=0.9, weight_decay=0.0003),
     clip_grad=dict(max_norm=40, norm_type=2))
